@@ -5,10 +5,12 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <esp_log.h>
+#include <driver/hw_timer.h>
+#include <freertos/semphr.h>
 #include "CC1101.h"
 #include "driver/spi.h"
 
-static const char *log = "cc1101";
+static const char *TAG = "cc1101";
 
 void cc1101_spiInitialize();
 
@@ -23,8 +25,8 @@ esp_err_t cc1101_waitUntilState(uint8_t waitForState) {
         int state = cc1101_readRegister(CC1101_MARCSTATE, Burst) & 0x1f;
         if (state == waitForState) break;
         vTaskDelay(5 / portTICK_PERIOD_MS);
-        if(i == 99) {
-            ESP_LOGE(log, "Could not set state of transmitter - state is %02x\n", state);
+        if (i == 99) {
+            ESP_LOGE(TAG, "Could not set state of transmitter - state is %02x\n", state);
             return ESP_FAIL;
         }
     }
@@ -69,16 +71,23 @@ void cc1101_initialize() {
 //    cc1101_calibrate();
 }
 
-void cc1101_resetChip() {
-    spi_deinit(HSPI_HOST);
-    gpio_config_t input;
-    input.mode = GPIO_MODE_OUTPUT;
-    input.pull_up_en = GPIO_PULLUP_ENABLE;
-    input.pull_down_en = GPIO_PULLDOWN_DISABLE;
-    input.intr_type = GPIO_INTR_DISABLE;
-    input.pin_bit_mask = 1 << CC1101_CS | 1 << CC1101_MOSI | 1 << CC1101_CLK;
-    gpio_config(&input);
+SemaphoreHandle_t sem = NULL;
 
+void timer_callback() {
+    xSemaphoreGive(sem);
+}
+
+void delay_us(uint32_t us) {
+    if (sem == NULL) sem = xSemaphoreCreateBinary();
+    hw_timer_init(timer_callback, NULL);
+    hw_timer_alarm_us(us, false);
+    xSemaphoreTake(sem, portMAX_DELAY);
+    hw_timer_deinit();
+}
+
+void cc1101_resetChip() {
+    ESP_LOGI(TAG, "Starting CC1101 reset");
+    cc1101_spiInitialize();
 //    gpio_config_t output;
 //    output.mode = GPIO_MODE_OUTPUT;
 //    output.pull_up_en = GPIO_PULLUP_DISABLE;
@@ -87,17 +96,30 @@ void cc1101_resetChip() {
 //    output.pin_bit_mask = 1<<CC1101_MISO;
 //    gpio_config(&output);
 
-    gpio_set_level(CC1101_CLK, 1);
-    gpio_set_level(CC1101_MOSI, 0);
     gpio_set_level(CC1101_CS, 0);
     gpio_set_level(CC1101_CS, 1);
     gpio_set_level(CC1101_CS, 0);
+    delay_us(50);
     gpio_set_level(CC1101_CS, 1);
-    vTaskDelay(1 / portTICK_PERIOD_MS);
+    delay_us(50);
     gpio_set_level(CC1101_CS, 0);
+    ESP_LOGI(TAG, "Wait for miso");
     cc1101_waitMisoLow();
-    cc1101_spiInitialize();
-    cc1101_sendCommand(CC1101_SRES);
+
+    uint32_t in = CC1101_SRES;
+    spi_trans_t frame;
+    frame.addr = NULL;
+    frame.cmd = NULL;
+    frame.mosi = &in;
+    frame.bits.cmd = 0;
+    frame.bits.addr = 0;
+    frame.bits.miso = 0;
+    frame.bits.mosi = 8;
+    spi_trans(HSPI_HOST, &frame);
+
+    cc1101_waitMisoLow();
+    gpio_set_level(CC1101_CS, 1);
+    ESP_LOGI(TAG, "CC1101 reset");
 }
 
 esp_err_t cc1101_calibrate() {

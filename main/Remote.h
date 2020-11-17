@@ -6,15 +6,18 @@
 #define MQTT_TCP_REMOTE_H
 
 #include <stdint.h>
+#include <esp_err.h>
 #include "stdbool.h"
 
 volatile bool remote_sendingCommand;
 
 void remote_initialize();
 
-uint32_t remote_sendCmdVoltomat(uint64_t cmd);
+esp_err_t remote_sendCmdVoltomat(uint64_t cmd);
 
-uint32_t remote_sendCmdSilverCrest(uint32_t cmd);
+esp_err_t remote_sendCmdSilverCrest(uint32_t cmd);
+
+esp_err_t remote_sendVoglauer(uint64_t cmd);
 
 void remote_writeOutData();
 
