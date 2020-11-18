@@ -11,13 +11,15 @@
 
 volatile bool remote_sendingCommand;
 
-void remote_initialize();
+esp_err_t remote_initialize();
 
 esp_err_t remote_sendCmdVoltomat(uint64_t cmd);
 
 esp_err_t remote_sendCmdSilverCrest(uint32_t cmd);
 
 esp_err_t remote_sendVoglauer(uint64_t cmd);
+
+esp_err_t remote_resetCC1101();
 
 void remote_writeOutData();
 

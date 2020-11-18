@@ -18,7 +18,9 @@ void cc1101_waitMisoLow();
 
 void cc1101_sendCommand(uint8_t cmd);
 
-uint8_t cc1101_readRegister(uint8_t address, enum ReadRegisterType readType);
+uint8_t cc1101_readRegister(uint8_t address, ReadRegisterType readType);
+
+void cc1101_writeRegister(uint8_t address, uint8_t value);
 
 esp_err_t cc1101_waitUntilState(uint8_t waitForState) {
     for (uint8_t i = 0; i < 100; i++) {
@@ -33,42 +35,54 @@ esp_err_t cc1101_waitUntilState(uint8_t waitForState) {
     return ESP_OK;
 }
 
-void cc1101_writeRegister(uint8_t address, uint8_t value);
+esp_err_t cc1101_initialize() {
+    cc1101_spiInitialize();
+    cc1101_por_sres();
+    return cc1101_writeInitialRegisters();
+}
 
-void cc1101_initialize() {
-    cc1101_resetChip();
+esp_err_t cc1101_writeInitialRegisters() {
     //
     // Rf settings for CC1101
     //
-    cc1101_writeRegister(CC1101_IOCFG2, 0x0B);   //GDO2 Output Pin Configuration
-    cc1101_writeRegister(CC1101_IOCFG0, 0x0C);   //GDO0 Output Pin Configuration
-    cc1101_writeRegister(CC1101_FIFOTHR, 0x47);  //RX FIFO and TX FIFO Thresholds
-    cc1101_writeRegister(CC1101_PKTCTRL0, 0x12); //Packet Automation Control
-    cc1101_writeRegister(CC1101_FSCTRL1, 0x06);  //Frequency Synthesizer Control
-    cc1101_writeRegister(CC1101_FREQ2, 0x10);    //Frequency Control Word, High Byte
-    cc1101_writeRegister(CC1101_FREQ1, 0xB0);    //Frequency Control Word, Middle Byte
-    cc1101_writeRegister(CC1101_FREQ0, 0xA3);    //Frequency Control Word, Low Byte
-    cc1101_writeRegister(CC1101_MDMCFG4, 0x8D);  //Modem Configuration
-    cc1101_writeRegister(CC1101_MDMCFG3, 0x3B);  //Modem Configuration
-    cc1101_writeRegister(CC1101_MDMCFG2, 0x30);  //Modem Configuration
-    cc1101_writeRegister(CC1101_MDMCFG1, 0x00);  //Modem Configuration
-    cc1101_writeRegister(CC1101_DEVIATN, 0x15);  //Modem Deviation Setting
-    cc1101_writeRegister(CC1101_MCSM0, 0x18);    //Main Radio Control State Machine Configuration
-    cc1101_writeRegister(CC1101_FOCCFG, 0x16);   //Frequency Offset Compensation Configuration
-    cc1101_writeRegister(CC1101_WORCTRL, 0xFB);  //Wake On Radio Control
-    cc1101_writeRegister(CC1101_FREND0, 0x11);   //Front End TX Configuration
-    cc1101_writeRegister(CC1101_FSCAL3, 0xEA);   //Frequency Synthesizer Calibration
-    cc1101_writeRegister(CC1101_FSCAL2, 0x2A);   //Frequency Synthesizer Calibration
-    cc1101_writeRegister(CC1101_FSCAL1, 0x00);   //Frequency Synthesizer Calibration
-    cc1101_writeRegister(CC1101_FSCAL0, 0x1F);   //Frequency Synthesizer Calibration
-    cc1101_writeRegister(CC1101_TEST2, 0x81);    //Various Test Settings
-    cc1101_writeRegister(CC1101_TEST1, 0x35);    //Various Test Settings
-    cc1101_writeRegister(CC1101_TEST0, 0x09);    //Various Test Settings
+    uint8_t registryData[24][2] = {
+            {CC1101_IOCFG2,   0x0B},    //GDO2 Output Pin Configuration
+            {CC1101_IOCFG0,   0x0C},    //GDO0 Output Pin Configuration
+            {CC1101_FIFOTHR,  0x47},    //RX FIFO and TX FIFO Thresholds
+            {CC1101_PKTCTRL0, 0x12},    //Packet Automation Control
+            {CC1101_FSCTRL1,  0x06},    //Frequency Synthesizer Control
+            {CC1101_FREQ2,    0x10},    //Frequency Control Word, High Byte
+            {CC1101_FREQ1,    0xB0},    //Frequency Control Word, Middle Byte
+            {CC1101_FREQ0,    0xA3},    //Frequency Control Word, Low Byte
+            {CC1101_MDMCFG4,  0x8D},    //Modem Configuration
+            {CC1101_MDMCFG3,  0x3B},    //Modem Configuration
+            {CC1101_MDMCFG2,  0x30},    //Modem Configuration
+            {CC1101_MDMCFG1,  0x00},    //Modem Configuration
+            {CC1101_DEVIATN,  0x15},    //Modem Deviation Setting
+            {CC1101_MCSM0,    0x18},    //Main Radio Control State Machine Configuration
+            {CC1101_FOCCFG,   0x16},    //Frequency Offset Compensation Configuration
+            {CC1101_WORCTRL,  0xFB},    //Wake On Radio Control
+            {CC1101_FREND0,   0x11},    //Front End TX Configuration
+            {CC1101_FSCAL3,   0xEA},    //Frequency Synthesizer Calibration
+            {CC1101_FSCAL2,   0x2A},    //Frequency Synthesizer Calibration
+            {CC1101_FSCAL1,   0x00},    //Frequency Synthesizer Calibration
+            {CC1101_FSCAL0,   0x1F},    //Frequency Synthesizer Calibration
+            {CC1101_TEST2,    0x81},    //Various Test Settings
+            {CC1101_TEST1,    0x35},    //Various Test Settings
+            {CC1101_TEST0,    0x09},    //Various Test Settings
+    };
+    for(uint8_t i = 0; i < 24; i++) {
+        uint8_t address = registryData[i][0];
+        uint8_t value = registryData[i][1];
+        cc1101_writeRegister(address, value);
+        uint8_t realRegisterValue = cc1101_readRegister(address, Single);
+        if(realRegisterValue != value) {
+            ESP_LOGE(TAG, "Registry write %02x, not successful, is %02x, should be %02x", address, realRegisterValue, value);
+            return ESP_FAIL;
+        }
+    }
 
-//    cc1101_sendCommand(CC1101_SIDLE);
-//    cc1101_waitUntilState(0x01);
-//
-//    cc1101_calibrate();
+    return ESP_OK;
 }
 
 SemaphoreHandle_t sem = NULL;
@@ -81,31 +95,12 @@ void delay_us(uint32_t us) {
     if (sem == NULL) sem = xSemaphoreCreateBinary();
     hw_timer_init(timer_callback, NULL);
     hw_timer_alarm_us(us, false);
-    xSemaphoreTake(sem, portMAX_DELAY);
+    xSemaphoreTake(sem, portTICK_PERIOD_MS);
     hw_timer_deinit();
 }
 
-void cc1101_resetChip() {
-    ESP_LOGI(TAG, "Starting CC1101 reset");
-    cc1101_spiInitialize();
-//    gpio_config_t output;
-//    output.mode = GPIO_MODE_OUTPUT;
-//    output.pull_up_en = GPIO_PULLUP_DISABLE;
-//    output.pull_down_en = GPIO_PULLDOWN_ENABLE;
-//    output.intr_type = GPIO_INTR_DISABLE;
-//    output.pin_bit_mask = 1<<CC1101_MISO;
-//    gpio_config(&output);
-
+void cc1101_SRES() {
     gpio_set_level(CC1101_CS, 0);
-    gpio_set_level(CC1101_CS, 1);
-    gpio_set_level(CC1101_CS, 0);
-    delay_us(50);
-    gpio_set_level(CC1101_CS, 1);
-    delay_us(50);
-    gpio_set_level(CC1101_CS, 0);
-    ESP_LOGI(TAG, "Wait for miso");
-    cc1101_waitMisoLow();
-
     uint32_t in = CC1101_SRES;
     spi_trans_t frame;
     frame.addr = NULL;
@@ -119,6 +114,23 @@ void cc1101_resetChip() {
 
     cc1101_waitMisoLow();
     gpio_set_level(CC1101_CS, 1);
+}
+
+void cc1101_por_sres() {
+    ESP_LOGI(TAG, "Starting CC1101 reset");
+    gpio_set_level(CC1101_CS, 0);
+    gpio_set_level(CC1101_CS, 1);
+    gpio_set_level(CC1101_CS, 0);
+    ESP_LOGI(TAG, "Timer wait");
+    delay_us(50);
+    ESP_LOGI(TAG, "Timer wait");
+    gpio_set_level(CC1101_CS, 1);
+    delay_us(50);
+    gpio_set_level(CC1101_CS, 0);
+    ESP_LOGI(TAG, "Wait for miso");
+    cc1101_waitMisoLow();
+
+    cc1101_SRES();
     ESP_LOGI(TAG, "CC1101 reset");
 }
 
@@ -179,7 +191,7 @@ void cc1101_sendCommand(uint8_t cmd) {
     gpio_set_level(CC1101_CS, 1);
 }
 
-uint8_t cc1101_readRegister(uint8_t address, enum ReadRegisterType readType) {
+uint8_t cc1101_readRegister(uint8_t address, ReadRegisterType readType) {
     uint8_t addr = address | readType;
     gpio_set_level(CC1101_CS, 0);
     cc1101_waitMisoLow();
@@ -206,15 +218,16 @@ void cc1101_writeRegister(uint8_t address, uint8_t value) {
     gpio_set_level(CC1101_CS, 0);
     cc1101_waitMisoLow();
 
-    uint32_t in = value << 8 | address;
+    uint32_t in = value;
+    uint32_t cmd = address;
     spi_trans_t frame;
     frame.addr = NULL;
-    frame.cmd = NULL;
+    frame.cmd = &cmd;
     frame.mosi = &in;
     frame.miso = NULL;
-    frame.bits.cmd = 0;
+    frame.bits.cmd = 8;
     frame.bits.addr = 0;
-    frame.bits.mosi = 16;
+    frame.bits.mosi = 8;
     frame.bits.miso = 0;
     spi_trans(HSPI_HOST, &frame);
 

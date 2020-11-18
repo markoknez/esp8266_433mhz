@@ -290,14 +290,23 @@ enum RFSTATE {
 #define PA_LowPower               0x60
 #define PA_LongDistance           0xC0
 
-enum ReadRegisterType {
+typedef enum {
     Single = 0x80,
     Burst = 0xC0
-};
+} ReadRegisterType;
 
-void cc1101_initialize();
+esp_err_t cc1101_initialize();
+esp_err_t cc1101_writeInitialRegisters();
 
-void cc1101_resetChip();
+/**
+ * Send SRES strobe
+ */
+void cc1101_SRES();
+
+/**
+ * Power on reset - chip reset sequence
+ */
+void cc1101_por_sres();
 
 esp_err_t cc1101_startTX();
 

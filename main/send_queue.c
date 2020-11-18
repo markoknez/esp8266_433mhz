@@ -13,7 +13,8 @@ const static char *TAG = "SEND_QUEUE";
 typedef enum {
     SILVERCREST,
     Voltomat,
-    Voglauer
+    Voglauer,
+    Reset
 } RemoteCmdType;
 
 typedef struct {
@@ -38,6 +39,9 @@ _Noreturn void sendTask(void *pvTask) {
             case Voglauer:
                 remote_sendVoglauer(cmd.cmd);
                 break;
+            case Reset:
+                remote_resetCC1101();
+                break;
             default:
                 ESP_LOGE(TAG, "Not implemented");
         }
@@ -46,7 +50,9 @@ _Noreturn void sendTask(void *pvTask) {
 }
 
 esp_err_t queue_init() {
-    remote_initialize();
+    if(remote_initialize() != ESP_OK) {
+        return ESP_FAIL;
+    }
     remoteCmdQueue = xQueueCreate(10, sizeof(RemoteCmd));
     if (remoteCmdQueue == NULL) {
         ESP_LOGE(TAG, "Could not create queue");
@@ -59,7 +65,7 @@ esp_err_t queue_init() {
 void print(uint64_t val) {
     uint64_t c = val;
     while (c > 0) {
-        printf("%u", (uint32_t)(c % 10));
+        printf("%u", (uint32_t) (c % 10));
         c /= 10;
     }
     printf("\n");
@@ -93,6 +99,7 @@ esp_err_t queue_mqttEvent(esp_mqtt_event_handle_t event) {
             esp_mqtt_client_subscribe(client, "remote/voltomat", 1);
             esp_mqtt_client_subscribe(client, "remote/voltomat/1", 1);
             esp_mqtt_client_subscribe(client, "remote/voglauer", 1);
+            esp_mqtt_client_subscribe(client, "remote/reset", 1);
             break;
         case MQTT_EVENT_DISCONNECTED:
         case MQTT_EVENT_SUBSCRIBED:
@@ -202,13 +209,13 @@ esp_err_t queue_mqttEvent(esp_mqtt_event_handle_t event) {
                 xQueueSend(remoteCmdQueue, &remoteCommand, 0);
             } else if (strncmp("remote/voglauer", event->topic, event->topic_len) == 0) {
                 char *lengthStr = memchr(event->data, ',', event->data_len);
-                if(lengthStr == NULL) {
+                if (lengthStr == NULL) {
                     ESP_LOGW(TAG, "Invalid voglauer command");
                     return ESP_OK;
                 }
                 uint64_t command = parseUint64(event->data, lengthStr - event->data);
                 lengthStr++; // move pointer over ,
-                uint8_t repeat = (uint8_t)parseUint64(lengthStr, event->data + event->data_len - lengthStr);
+                uint8_t repeat = (uint8_t) parseUint64(lengthStr, event->data + event->data_len - lengthStr);
                 printf("Command:");
                 print(command);
                 printf("Repeat:");
@@ -219,6 +226,10 @@ esp_err_t queue_mqttEvent(esp_mqtt_event_handle_t event) {
                 remoteCommand.type = Voglauer;
                 remoteCommand.repeat = repeat;
                 xQueueSend(remoteCmdQueue, &remoteCommand, 0);
+            } else if (strncmp("remote/reset", event->topic, event->topic_len) == 0) {
+                RemoteCmd remoteCmd;
+                remoteCmd.type = Reset;
+                xQueueSend(remoteCmdQueue, &remoteCmd, 0);
             } else {
                 ESP_LOGW(TAG, "Could not find handler for topic %.*s", event->topic_len, event->topic);
             }

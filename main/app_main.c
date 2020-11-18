@@ -80,7 +80,11 @@ static void mqtt_app_start(void) {
 }
 
 void app_main() {
-    queue_init();
+    if(queue_init() != ESP_OK) {
+        ESP_LOGW(TAG, "Bad startup, quitting");
+        vTaskDelay(5000 / portTICK_PERIOD_MS);
+        abort();
+    }
 
     ESP_LOGI(TAG, "[APP] Startup..");
     ESP_LOGI(TAG, "[APP] Free memory: %d bytes", esp_get_free_heap_size());

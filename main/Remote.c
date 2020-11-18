@@ -161,22 +161,22 @@ void IRAM_ATTR timerVoltomat() {
     Voltomat *v = remote->voltomat;
     switch (v->state) {
         case VOLT_HEADER:
-            gpio_set_level(CC1101_DATAPIN, 1);
+            gpio_set_level(CC1101_DATAPIN, 0);
             v->state = VOLT_HEADER_END;
             hw_timer_alarm_us(300, false);
             break;
         case VOLT_HEADER_END:
-            gpio_set_level(CC1101_DATAPIN, 0);
+            gpio_set_level(CC1101_DATAPIN, 1);
             v->state = VOLT_NEXT_GROUP;
             hw_timer_alarm_us(2560, false);
             break;
         case VOLT_REPEAT:
-            gpio_set_level(CC1101_DATAPIN, 0);
+            gpio_set_level(CC1101_DATAPIN, 1);
             v->state = VOLT_HEADER;
             hw_timer_alarm_us(10000, false);
             break;
         case VOLT_NEXT_GROUP:
-            gpio_set_level(CC1101_DATAPIN, 1);
+            gpio_set_level(CC1101_DATAPIN, 0);
             if (v->commandBitCounter > 0) {
                 v->groupCounter = (v->commandLeftover % 3) + 1;
                 v->commandLeftover /= 3;
@@ -198,7 +198,7 @@ void IRAM_ATTR timerVoltomat() {
             xSemaphoreGive(remote->semaphore);
             break;
         case VOLT_SENDING_GROUP:
-            gpio_set_level(CC1101_DATAPIN, 0);
+            gpio_set_level(CC1101_DATAPIN, 1);
             if (v->groupCounter > 1) {
                 v->groupCounter--;
                 v->state = VOLT_SENDING_GROUP_1;
@@ -209,7 +209,7 @@ void IRAM_ATTR timerVoltomat() {
             }
             break;
         case VOLT_SENDING_GROUP_1:
-            gpio_set_level(CC1101_DATAPIN, 1);
+            gpio_set_level(CC1101_DATAPIN, 0);
             v->state = VOLT_SENDING_GROUP;
             hw_timer_alarm_us(300, false);
             break;
@@ -285,7 +285,8 @@ void IRAM_ATTR timerVoglauer() {
     }
 }
 
-void remote_initialize() {
+esp_err_t remote_initialize() {
+
     remote = heap_caps_malloc(sizeof(remote_t), MALLOC_CAP_8BIT);
     remote->semaphore = xSemaphoreCreateBinary();
     remote_sendingCommand = false;
@@ -296,7 +297,11 @@ void remote_initialize() {
     cc1101Output.pull_up_en = GPIO_PULLUP_ENABLE;
     cc1101Output.pull_down_en = GPIO_PULLDOWN_DISABLE;
     gpio_config(&cc1101Output);
-    cc1101_initialize();
+
+    if(cc1101_initialize() != ESP_OK) {
+        return ESP_FAIL;
+    }
+    return ESP_OK;
 }
 
 esp_err_t remote_sendCmdVoltomat(uint64_t cmd) {
@@ -382,6 +387,14 @@ esp_err_t remote_sendVoglauer(uint64_t cmd) {
     free(v);
     remote->voglauer = NULL;
     ESP_LOGI(TAG, "Finished voglauer command");
+    return ESP_OK;
+}
+
+esp_err_t remote_resetCC1101() {
+    ESP_LOGI(TAG, "Reseting CC1101");
+    cc1101_SRES();
+    cc1101_writeInitialRegisters();
+    ESP_LOGI(TAG, "Reset finished");
     return ESP_OK;
 }
 
