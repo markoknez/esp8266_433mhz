@@ -26,19 +26,25 @@
 #include "Remote.h"
 #include "send_queue.h"
 
+#define GPIO_LED 2
+
 static const char *TAG = "main";
 
 static esp_err_t mqtt_event_handler_cb(esp_mqtt_event_handle_t event) {
 //    esp_mqtt_client_handle_t client = event->client;
 //    // your_context_t *context = event->context;
-//    switch (event->event_id) {
-//        case MQTT_EVENT_CONNECTED:
-//            ESP_LOGI(TAG, "MQTT_EVENT_CONNECTED");
-//
-//            break;
-//        case MQTT_EVENT_DISCONNECTED:
-//            ESP_LOGI(TAG, "MQTT_EVENT_DISCONNECTED");
-//            break;
+    switch (event->event_id) {
+        case MQTT_EVENT_CONNECTED:
+            ESP_LOGI(TAG, "MQTT_EVENT_CONNECTED");
+            gpio_set_level(GPIO_LED, 0);
+            break;
+        case MQTT_EVENT_DISCONNECTED:
+            ESP_LOGI(TAG, "MQTT_EVENT_DISCONNECTED");
+            gpio_set_level(GPIO_LED, 1);
+            break;
+        default:
+            break;
+    }
 //        case MQTT_EVENT_SUBSCRIBED:
 //            ESP_LOGI(TAG, "MQTT_EVENT_SUBSCRIBED, msg_id=%d", event->msg_id);
 //            break;
@@ -86,17 +92,26 @@ void app_main() {
         abort();
     }
 
+    gpio_config_t ledCfg;
+    ledCfg.pull_down_en = GPIO_PULLDOWN_DISABLE;
+    ledCfg.pull_up_en = GPIO_PULLUP_DISABLE;
+    ledCfg.intr_type = GPIO_INTR_DISABLE;
+    ledCfg.mode = GPIO_MODE_OUTPUT;
+    ledCfg.pin_bit_mask = 1 << GPIO_LED;
+    gpio_config(&ledCfg);
+    gpio_set_level(GPIO_LED, 1);
+
     ESP_LOGI(TAG, "[APP] Startup..");
     ESP_LOGI(TAG, "[APP] Free memory: %d bytes", esp_get_free_heap_size());
     ESP_LOGI(TAG, "[APP] IDF version: %s", esp_get_idf_version());
 
     esp_log_level_set("*", ESP_LOG_INFO);
-    esp_log_level_set("MQTT_CLIENT", ESP_LOG_VERBOSE);
-    esp_log_level_set("MQTT_EXAMPLE", ESP_LOG_VERBOSE);
-    esp_log_level_set("TRANSPORT_TCP", ESP_LOG_VERBOSE);
-    esp_log_level_set("TRANSPORT_SSL", ESP_LOG_VERBOSE);
-    esp_log_level_set("TRANSPORT", ESP_LOG_VERBOSE);
-    esp_log_level_set("OUTBOX", ESP_LOG_VERBOSE);
+//    esp_log_level_set("MQTT_CLIENT", ESP_LOG_VERBOSE);
+//    esp_log_level_set("MQTT_EXAMPLE", ESP_LOG_VERBOSE);
+//    esp_log_level_set("TRANSPORT_TCP", ESP_LOG_VERBOSE);
+//    esp_log_level_set("TRANSPORT_SSL", ESP_LOG_VERBOSE);
+//    esp_log_level_set("TRANSPORT", ESP_LOG_VERBOSE);
+//    esp_log_level_set("OUTBOX", ESP_LOG_VERBOSE);
 
     ESP_ERROR_CHECK(nvs_flash_init());
     ESP_ERROR_CHECK(esp_netif_init());
